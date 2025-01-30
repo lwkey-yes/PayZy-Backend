@@ -249,10 +249,11 @@ const makePayment = async (req, res) => {
     }
 
     // Deduct from sender
-    sender.walletBalance -= amount;
+sender.walletBalance = Number(sender.walletBalance) - Number(amount);
 
     // Add to receiver
-    receiver.walletBalance += amount;
+    receiver.walletBalance = Number(receiver.walletBalance) + Number(amount);
+
 
     // Save both users
     await sender.save();
