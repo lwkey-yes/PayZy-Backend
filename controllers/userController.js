@@ -223,43 +223,39 @@ const makePayment = async (req, res) => {
   }
 
   try {
-    const sender = await User.findById(senderId).select("+transactionPin");
-    const receiver = await User.findById(receiverId);
+    const sender = await User.findById(senderId).select("+transactionPin").lean();
+    const receiver = await User.findById(receiverId).lean();
 
     if (!sender || !receiver) {
       return res.status(404).json({ message: "Sender or Receiver not found." });
     }
 
-    // Verify Transaction PIN
-    const isPinValid = await bcrypt.compare(pin, sender.transactionPin || "");
-    if (!isPinValid) {
-      return res.status(401).json({ message: "Invalid transaction PIN" });
-    }
+    sender.walletBalance = sender.walletBalance || 0;
+    receiver.walletBalance = receiver.walletBalance || 0;
 
     if (sender.walletBalance < amount) {
       await new Transaction({ sender: senderId, receiver: receiverId, amount, status: "failed" }).save();
       return res.status(400).json({ message: "Insufficient wallet balance." });
     }
 
-    sender.walletBalance -= Number(amount);
-    receiver.walletBalance += Number(amount);
+    const isPinValid = await bcrypt.compare(transactionPin, sender.transactionPin || "");
+    if (!isPinValid) {
+      return res.status(401).json({ message: "Invalid transaction PIN" });
+    }
 
-    await sender.save();
-    await receiver.save();
+    await User.findByIdAndUpdate(senderId, { $inc: { walletBalance: -amount } });
+    await User.findByIdAndUpdate(receiverId, { $inc: { walletBalance: amount } });
 
     await new Transaction({ sender: senderId, receiver: receiverId, amount, status: "success" }).save();
 
-    res.status(200).json({
-      message: "Payment successful",
-      sender: { id: sender._id, walletBalance: sender.walletBalance },
-      receiver: { id: receiver._id, walletBalance: receiver.walletBalance },
-    });
+    res.status(200).json({ message: "Payment successful" });
   } catch (error) {
     console.error("Error making payment:", error);
     await new Transaction({ sender: senderId, receiver: receiverId, amount, status: "failed" }).save();
     res.status(500).json({ message: "Server error", error });
   }
 };
+
 
 
 // update transaction pin
