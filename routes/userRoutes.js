@@ -1,5 +1,5 @@
 const express = require("express");
-const { registerUser, loginUser, requestPasswordReset, resetPassword, getUserDetails, makePayment, updateUserProfile, getAllUsersForUser, getTransactionHistory, updateTransactionPin } = require("../controllers/userController");
+const { registerUser, loginUser, requestPasswordReset, resetPassword, getUserDetails, makePayment, updateUserProfile, getAllUsersForUser, getTransactionHistory,} = require("../controllers/userController");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const User = require("../models/User");
 
@@ -9,7 +9,7 @@ const router = express.Router();
 router.get("/profile", authenticateToken, getUserDetails); // View profile
 router.put("/profile", authenticateToken, updateUserProfile); // Update profile
 
-router.put("/update-pin", authenticateToken, updateTransactionPin);
+// router.put("/update-pin", authenticateToken, updateTransactionPin);
 
 // Register
 router.post("/register", registerUser);
