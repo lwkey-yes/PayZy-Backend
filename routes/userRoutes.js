@@ -15,6 +15,7 @@ router.post("/register", registerUser);
 // Login
 router.post("/login", loginUser);
 
+
 // Request password reset
 router.post("/request-password-reset", requestPasswordReset);
 

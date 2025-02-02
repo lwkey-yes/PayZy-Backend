@@ -1,4 +1,4 @@
-const crypto =require("crypto");
+const crypto = require("crypto");
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -7,74 +7,6 @@ const mongoose = require("mongoose");
 const Transaction = require("../models/Transaction");
 
 require("dotenv").config();
-
-const getAllUsersForUser = async (req, res) => {
-  try {
-    const users = await User.find({})
-      .select("name email walletBalance"); // Include only the necessary fields
-
-    res.status(200).json(users);
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// View User Profile
-const getUserDetails = async (req, res) => {
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.user.id)) {
-      return res.status(400).json({ message: "Invalid user ID" });
-    }
-
-    const user = await User.findById(req.user.id).select("-password");
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.json(user);
-  } catch (error) {
-    console.error("Error fetching user data:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-const updateUserProfile = async (req, res) => {
-  const { name, email } = req.body; // Removed 'contact' since it's not in your schema
-
-  try {
-    // Validate the user ID
-    if (!mongoose.Types.ObjectId.isValid(req.user.id)) {
-      return res.status(400).json({ message: "Invalid user ID" });
-    }
-
-    // Prepare the updated data
-    const updatedData = {};
-    if (name) updatedData.name = name;
-    if (email) {
-      // Check if email is already in use
-      const existingUser = await User.findOne({ email });
-      if (existingUser && existingUser._id.toString() !== req.user.id) {
-        return res.status(400).json({ message: "Email is already in use" });
-      }
-      updatedData.email = email;
-    }
-
-    // Update the user
-    const updatedUser = await User.findByIdAndUpdate(req.user.id, updatedData, {
-      new: true, // Return the updated document
-    }).select("-password"); // Exclude password from response
-
-    // Respond with the updated user
-    res.status(200).json({
-      message: "Profile updated successfully",
-      user: updatedUser,
-    });
-  } catch (error) {
-    console.error("Error updating user profile:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-};
 
 // Request Password Reset
 const requestPasswordReset = async (req, res) => {
@@ -146,26 +78,92 @@ const transporter = nodemailer.createTransport({
   logger: true,
 });
 
-// transporter.verify((error, success) => {
-//   if (error) {
-//     console.error("SMTP Connection Error:", error);
-//   } else {
-//     console.log("SMTP Connected Successfully:", success);
-//   }
-// });
+const getAllUsersForUser = async (req, res) => {
+  try {
+    const users = await User.find({}).select("name email walletBalance");
+    res.status(200).json(users);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
+// View User Profile
+const getUserDetails = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.user.id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const user = await User.findById(req.user.id).select("-password -transactionPin");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error("Error fetching user data:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const updateUserProfile = async (req, res) => {
+  const { name, email } = req.body;
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.user.id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const updatedData = {};
+    if (name) updatedData.name = name;
+    if (email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser && existingUser._id.toString() !== req.user.id) {
+        return res.status(400).json({ message: "Email is already in use" });
+      }
+      updatedData.email = email;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(req.user.id, updatedData, {
+      new: true,
+    }).select("-password -transactionPin");
+
+    res.status(200).json({ message: "Profile updated successfully", user: updatedUser });
+  } catch (error) {
+    console.error("Error updating user profile:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 // Register User
 const registerUser = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, transactionPin } = req.body;
+
   try {
+    // ✅ Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: "User already exists" });
     }
 
+    // ✅ Validate Transaction PIN (must be exactly 4 digits)
+    if (!/^\d{4}$/.test(transactionPin)) {
+      return res.status(400).json({ message: "Transaction PIN must be exactly 4 digits" });
+    }
+
+    // ✅ Hash Password & Transaction PIN
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ name, email, password: hashedPassword });
+    const hashedTransactionPin = await bcrypt.hash(transactionPin, 10);
+
+    // ✅ Create New User
+    const newUser = new User({
+      name,
+      email,
+      password: hashedPassword,
+      transactionPin: hashedTransactionPin, // Save hashed PIN
+    });
+
     await newUser.save();
 
     res.status(201).json({ message: "User registered successfully" });
@@ -175,15 +173,14 @@ const registerUser = async (req, res) => {
   }
 };
 
+
 // Login User
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email and password are required" });
+      return res.status(400).json({ message: "Email and password are required" });
     }
 
     const user = await User.findOne({ email });
@@ -191,32 +188,30 @@ const loginUser = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Compare passwords
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
-    const { password: _, ...UserWithoutPassword } = user.toObject();
+    const { password: _, transactionPin, ...userWithoutSensitiveData } = user.toObject();
 
-    res.status(200).json({ message: "Login successful", token, user: UserWithoutPassword, });
+    res.status(200).json({ message: "Login successful", token, user: userWithoutSensitiveData });
   } catch (error) {
     console.error("Error during login:", error);
     res.status(500).json({ message: "Server error", error });
   }
 };
 
-// Make payment
+
+// Make Payment (With Transaction PIN)
 const makePayment = async (req, res) => {
-  const { receiverId, amount } = req.body;
+  const { receiverId, amount, pin } = req.body;
   const senderId = req.user.id;
 
-  if (!receiverId || !amount) {
-    return res.status(400).json({ message: "Receiver ID and amount are required" });
+  if (!receiverId || !amount || !pin) {
+    return res.status(400).json({ message: "Receiver ID, amount, and PIN are required" });
   }
 
   if (senderId === receiverId) {
@@ -228,45 +223,31 @@ const makePayment = async (req, res) => {
   }
 
   try {
-    const sender = await User.findById(senderId);
+    const sender = await User.findById(senderId).select("+transactionPin");
     const receiver = await User.findById(receiverId);
 
     if (!sender || !receiver) {
       return res.status(404).json({ message: "Sender or Receiver not found." });
     }
 
-    if (sender.walletBalance < amount) {
-      // Log a failed transaction if the sender has insufficient funds
-      const failedTransaction = new Transaction({
-        sender: senderId,
-        receiver: receiverId,
-        amount,
-        status: "failed",
-      });
-      await failedTransaction.save();
+    // Verify Transaction PIN
+    const isPinValid = await bcrypt.compare(pin, sender.transactionPin || "");
+    if (!isPinValid) {
+      return res.status(401).json({ message: "Invalid transaction PIN" });
+    }
 
+    if (sender.walletBalance < amount) {
+      await new Transaction({ sender: senderId, receiver: receiverId, amount, status: "failed" }).save();
       return res.status(400).json({ message: "Insufficient wallet balance." });
     }
 
-    // Deduct from sender
-sender.walletBalance = Number(sender.walletBalance) - Number(amount);
+    sender.walletBalance -= Number(amount);
+    receiver.walletBalance += Number(amount);
 
-    // Add to receiver
-    receiver.walletBalance = Number(receiver.walletBalance) + Number(amount);
-
-
-    // Save both users
     await sender.save();
     await receiver.save();
 
-    // Save the transaction
-    const successfulTransaction = new Transaction({
-      sender: senderId,
-      receiver: receiverId,
-      amount,
-      status: "success",
-    });
-    await successfulTransaction.save();
+    await new Transaction({ sender: senderId, receiver: receiverId, amount, status: "success" }).save();
 
     res.status(200).json({
       message: "Payment successful",
@@ -275,20 +256,12 @@ sender.walletBalance = Number(sender.walletBalance) - Number(amount);
     });
   } catch (error) {
     console.error("Error making payment:", error);
-
-    // Log the failed transaction in case of server errors
-    const failedTransaction = new Transaction({
-      sender: senderId,
-      receiver: receiverId,
-      amount,
-      status: "failed",
-    });
-    await failedTransaction.save();
-
+    await new Transaction({ sender: senderId, receiver: receiverId, amount, status: "failed" }).save();
     res.status(500).json({ message: "Server error", error });
   }
 };
 
+// Get Transaction History
 const getTransactionHistory = async (req, res) => {
   const userId = req.user.id;
 
@@ -307,6 +280,14 @@ const getTransactionHistory = async (req, res) => {
   }
 };
 
-
-
-module.exports = { getAllUsersForUser, getUserDetails, updateUserProfile, registerUser, loginUser, requestPasswordReset, resetPassword, makePayment, getTransactionHistory };
+module.exports = {
+  getAllUsersForUser,
+  getUserDetails,
+  updateUserProfile,
+  registerUser,
+  loginUser,
+  makePayment,
+  getTransactionHistory,
+  resetPassword,
+  requestPasswordReset,
+};
