@@ -207,10 +207,10 @@ const loginUser = async (req, res) => {
 
 // Make Payment (With Transaction PIN)
 const makePayment = async (req, res) => {
-  const { receiverId, amount, pin } = req.body;
+  const { receiverId, amount, transactionPin } = req.body;
   const senderId = req.user.id;
 
-  if (!receiverId || !amount || !pin) {
+  if (!receiverId || !amount || !transactionPin) {
     return res.status(400).json({ message: "Receiver ID, amount, and PIN are required" });
   }
 
@@ -263,19 +263,19 @@ const makePayment = async (req, res) => {
 
 
 // update transaction pin
-const updateTransactionPin = async (req, res) => {
-  const { currentPin, newPin } = req.body;
-  const user = await User.findById(req.user.id);
+// const updateTransactionPin = async (req, res) => {
+//   const { currentPin, newPin } = req.body;
+//   const user = await User.findById(req.user.id);
 
-  if (!user || !(await bcrypt.compare(currentPin, user.transactionPin))) {
-    return res.status(400).json({ message: "Incorrect current PIN" });
-  }
+//   if (!user || !(await bcrypt.compare(currentPin, user.transactionPin))) {
+//     return res.status(400).json({ message: "Incorrect current PIN" });
+//   }
 
-  user.transactionPin = await bcrypt.hash(newPin, 10);
-  await user.save();
+//   user.transactionPin = await bcrypt.hash(newPin, 10);
+//   await user.save();
 
-  res.json({ message: "Transaction PIN updated successfully" });
-};
+//   res.json({ message: "Transaction PIN updated successfully" });
+// };
 
 // Get Transaction History
 const getTransactionHistory = async (req, res) => {
