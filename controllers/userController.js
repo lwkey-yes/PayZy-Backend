@@ -261,6 +261,22 @@ const makePayment = async (req, res) => {
   }
 };
 
+
+// update transaction pin
+const updateTransactionPin = async (req, res) => {
+  const { currentPin, newPin } = req.body;
+  const user = await User.findById(req.user.id);
+
+  if (!user || !(await bcrypt.compare(currentPin, user.transactionPin))) {
+    return res.status(400).json({ message: "Incorrect current PIN" });
+  }
+
+  user.transactionPin = await bcrypt.hash(newPin, 10);
+  await user.save();
+
+  res.json({ message: "Transaction PIN updated successfully" });
+};
+
 // Get Transaction History
 const getTransactionHistory = async (req, res) => {
   const userId = req.user.id;
@@ -290,4 +306,5 @@ module.exports = {
   getTransactionHistory,
   resetPassword,
   requestPasswordReset,
+  updateTransactionPin,
 };
