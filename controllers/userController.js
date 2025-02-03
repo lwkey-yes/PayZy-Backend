@@ -243,18 +243,29 @@ const makePayment = async (req, res) => {
       return res.status(401).json({ message: "Invalid transaction PIN" });
     }
 
-    await User.findByIdAndUpdate(senderId, { $inc: { walletBalance: -amount } });
+    
+    const updatedSender = await User.findByIdAndUpdate(
+      senderId,
+      { $inc: { walletBalance: -amount } },
+      { new: true }
+    );
+
     await User.findByIdAndUpdate(receiverId, { $inc: { walletBalance: amount } });
 
     await new Transaction({ sender: senderId, receiver: receiverId, amount, status: "success" }).save();
 
-    res.status(200).json({ message: "Payment successful" });
+    res.status(200).json({
+      message: "Payment successful",
+      senderBalance: updatedSender.walletBalance, 
+    });
+
   } catch (error) {
     console.error("Error making payment:", error);
     await new Transaction({ sender: senderId, receiver: receiverId, amount, status: "failed" }).save();
     res.status(500).json({ message: "Server error", error });
   }
 };
+
 
 
 
